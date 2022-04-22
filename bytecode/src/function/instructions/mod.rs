@@ -107,6 +107,9 @@ pub(super) use sub_wrapped::*;
 pub(super) mod square;
 pub(super) use square::*;
 
+pub(super) mod ternary;
+pub(super) use ternary::*;
+
 pub(super) mod xor;
 pub(super) use xor::*;
 
@@ -205,6 +208,8 @@ pub enum Instruction<P: Program> {
     SubWrapped(SubWrapped<P>),
     /// Squares 'first', storing the outcome in `destination`.
     Square(Square<P>),
+    /// Selects `first`, if `condition` is true, otherwise selects `second`, storing the result in `destination`.
+    Ternary(Ternary<P>),
     /// Performs a bitwise Xor on `first` and `second`, storing the outcome in `destination`.
     Xor(Xor<P>),
 }
@@ -245,6 +250,7 @@ impl<P: Program> Instruction<P> {
             Self::Sub(..) => Sub::<P>::opcode(),
             Self::SubWrapped(..) => SubWrapped::<P>::opcode(),
             Self::Square(..) => Square::<P>::opcode(),
+            Self::Ternary(..) => Ternary::<P>::opcode(),
             Self::Xor(..) => Xor::<P>::opcode(),
         }
     }
@@ -284,6 +290,7 @@ impl<P: Program> Instruction<P> {
             Self::Sub(sub) => sub.operands(),
             Self::SubWrapped(sub_wrapped) => sub_wrapped.operands(),
             Self::Square(square) => square.operands(),
+            Self::Ternary(ternary) => ternary.operands(),
             Self::Xor(xor) => xor.operands(),
         }
     }
@@ -323,6 +330,7 @@ impl<P: Program> Instruction<P> {
             Self::Sub(sub) => sub.destination(),
             Self::SubWrapped(sub_wrapped) => sub_wrapped.destination(),
             Self::Square(square) => square.destination(),
+            Self::Ternary(ternary) => ternary.destination(),
             Self::Xor(xor) => xor.destination(),
         }
     }
@@ -362,6 +370,7 @@ impl<P: Program> Instruction<P> {
             Self::Sub(instruction) => instruction.evaluate(registers),
             Self::SubWrapped(instruction) => instruction.evaluate(registers),
             Self::Square(instruction) => instruction.evaluate(registers),
+            Self::Ternary(instruction) => instruction.evaluate(registers),
             Self::Xor(instruction) => instruction.evaluate(registers),
         }
     }
@@ -394,8 +403,8 @@ impl<P: Program> Parser for Instruction<P> {
                 pair(tag(GreaterThanOrEqual::<P>::opcode()), tag(" ")),
                 map(GreaterThanOrEqual::parse, Into::into),
             ),
+            preceded(pair(tag(Inv::<P>::opcode()), tag(" ")), map(Inv::parse, Into::into)),
             alt((
-                preceded(pair(tag(Inv::<P>::opcode()), tag(" ")), map(Inv::parse, Into::into)),
                 preceded(pair(tag(LessThan::<P>::opcode()), tag(" ")), map(LessThan::parse, Into::into)),
                 preceded(pair(tag(LessThanOrEqual::<P>::opcode()), tag(" ")), map(LessThanOrEqual::parse, Into::into)),
                 preceded(pair(tag(Mul::<P>::opcode()), tag(" ")), map(Mul::parse, Into::into)),
@@ -415,6 +424,7 @@ impl<P: Program> Parser for Instruction<P> {
                 preceded(pair(tag(Sub::<P>::opcode()), tag(" ")), map(Sub::parse, Into::into)),
                 preceded(pair(tag(SubWrapped::<P>::opcode()), tag(" ")), map(SubWrapped::parse, Into::into)),
                 preceded(pair(tag(Square::<P>::opcode()), tag(" ")), map(Square::parse, Into::into)),
+                preceded(pair(tag(Ternary::<P>::opcode()), tag(" ")), map(Ternary::parse, Into::into)),
                 preceded(pair(tag(Xor::<P>::opcode()), tag(" ")), map(Xor::parse, Into::into)),
             )),
         ))(string)?;
@@ -459,6 +469,7 @@ impl<P: Program> fmt::Display for Instruction<P> {
             Self::Sub(instruction) => write!(f, "{} {};", self.opcode(), instruction),
             Self::SubWrapped(instruction) => write!(f, "{} {};", self.opcode(), instruction),
             Self::Square(instruction) => write!(f, "{} {};", self.opcode(), instruction),
+            Self::Ternary(instruction) => write!(f, "{} {};", self.opcode(), instruction),
             Self::Xor(instruction) => write!(f, "{} {};", self.opcode(), instruction),
         }
     }
@@ -500,7 +511,8 @@ impl<P: Program> FromBytes for Instruction<P> {
             29 => Ok(Self::SubWrapped(SubWrapped::read_le(&mut reader)?)),
             30 => Ok(Self::Square(Square::read_le(&mut reader)?)),
             31 => Ok(Self::Xor(Xor::read_le(&mut reader)?)),
-            32.. => Err(error(format!("Failed to deserialize an instruction of code {code}"))),
+            32 => Ok(Self::Ternary(Ternary::read_le(&mut reader)?)),
+            33.. => Err(error(format!("Failed to deserialize an instruction of code {code}"))),
         }
     }
 }
@@ -632,8 +644,12 @@ impl<P: Program> ToBytes for Instruction<P> {
                 u16::write_le(&30u16, &mut writer)?;
                 instruction.write_le(&mut writer)
             }
-            Self::Xor(instruction) => {
+            Self::Ternary(instruction) => {
                 u16::write_le(&31u16, &mut writer)?;
+                instruction.write_le(&mut writer)
+            }
+            Self::Xor(instruction) => {
+                u16::write_le(&32u16, &mut writer)?;
                 instruction.write_le(&mut writer)
             }
         }
