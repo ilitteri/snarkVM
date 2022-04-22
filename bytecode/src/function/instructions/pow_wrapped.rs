@@ -151,6 +151,12 @@ mod tests {
 
     type P = Process;
 
+    #[test]
+    fn test_parse() {
+        let (_, instruction) = Instruction::<P>::parse("pow.w r0 r1 into r2;").unwrap();
+        assert!(matches!(instruction, Instruction::PowWrapped(_)));
+    }
+
     test_modes!(i8_pow_u8, PowWrapped, "2i8", "7u8", &format!("{}i8", i8::MIN));
     test_modes!(i8_pow_u16, PowWrapped, "2i8", "7u16", &format!("{}i8", i8::MIN));
     test_modes!(i8_pow_u32, PowWrapped, "2i8", "7u32", &format!("{}i8", i8::MIN));

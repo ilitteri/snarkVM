@@ -152,6 +152,12 @@ mod tests {
 
     type P = Process;
 
+    #[test]
+    fn test_parse() {
+        let (_, instruction) = Instruction::<P>::parse("pow r0 r1 into r2;").unwrap();
+        assert!(matches!(instruction, Instruction::Pow(_)));
+    }
+
     test_modes!(field, Pow, "2field", "2field", "4field");
     binary_instruction_test!(field_pow_1, Pow, "2field.public", "1field.public", "2field.private");
     binary_instruction_test!(field_pow_0, Pow, "2field.public", "0field.public", "1field.private");

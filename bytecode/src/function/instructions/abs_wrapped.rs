@@ -123,6 +123,12 @@ mod tests {
     use super::*;
     use crate::{test_instruction_halts, test_modes, unary_instruction_test, Identifier, Process};
 
+    #[test]
+    fn test_parse() {
+        let (_, instruction) = Instruction::<Process>::parse("abs.w r0 into r1;").unwrap();
+        assert!(matches!(instruction, Instruction::AbsWrapped(_)));
+    }
+
     test_modes!(i8, AbsWrapped, "-1i8", "1i8");
     unary_instruction_test!(i8, AbsWrapped, &format!("{}i8.public", i8::MIN), &format!("{}i8.private", i8::MIN));
 
