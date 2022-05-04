@@ -17,7 +17,7 @@
 use crate::{circuits::*, prelude::*};
 use snarkvm_algorithms::{merkle_tree::MerklePath, prelude::*};
 
-use anyhow::{anyhow, Result, ensure};
+use anyhow::{anyhow, ensure, Result};
 use itertools::Itertools;
 use rand::{CryptoRng, Rng};
 use std::sync::Arc;
@@ -69,7 +69,7 @@ impl<N: Network> VirtualMachine<N> {
         };
 
         let program_id = request.to_program_id()?;
-        
+
         // TODO (raychu86): Clean this up.
         // Compute the input circuit proofs.
         let mut input_proofs = Vec::with_capacity(N::NUM_INPUTS as usize);
