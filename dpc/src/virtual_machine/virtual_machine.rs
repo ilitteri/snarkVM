@@ -187,11 +187,11 @@ impl<N: Network> VirtualMachine<N> {
 
         // Compute the starting balance of the caller.
         let starting_balance = request.to_balance().sub(request.fee());
-        ensure!(starting_balance.is_positive(), VMError::BalanceInsufficient);
+        ensure!(starting_balance.is_positive() || starting_balance.is_zero(), VMError::BalanceInsufficient);
 
         // Compute the final balance of the caller.
         let caller_balance = starting_balance.sub(amount);
-        ensure!(caller_balance.is_positive(), VMError::BalanceInsufficient);
+        ensure!(caller_balance.is_positive() || caller_balance.is_zero(), VMError::BalanceInsufficient);
 
         ResponseBuilder::new()
             .add_request(request.clone())
@@ -215,18 +215,18 @@ impl<N: Network> VirtualMachine<N> {
         // Check that the function id exists in the program.
 
         // Check that the function id is the same as the request.
-        ensure!(Some(*function_id) != request.function_id(), "Invalid function id");
+        ensure!(Some(*function_id) == request.function_id(), "Invalid function id");
 
         // Fetch the caller.
         ensure!(request.caller()? == function_inputs.caller, "Caller in instruction does not match request caller");
 
         // Compute the starting balance of the caller.
         let starting_balance = request.to_balance().sub(request.fee());
-        ensure!(starting_balance.is_positive(), VMError::BalanceInsufficient);
+        ensure!(starting_balance.is_positive() || starting_balance.is_zero(), VMError::BalanceInsufficient);
 
         // Compute the final balance of the caller.
         let caller_balance = starting_balance.sub(function_inputs.amount);
-        ensure!(caller_balance.is_positive(), VMError::BalanceInsufficient);
+        ensure!(caller_balance.is_positive() || caller_balance.is_zero(), VMError::BalanceInsufficient);
 
         let mut response_builder = ResponseBuilder::new().add_request(request.clone()).add_output(Output::new(
             function_inputs.recipient,
