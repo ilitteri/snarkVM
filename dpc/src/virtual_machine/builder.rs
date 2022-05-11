@@ -18,7 +18,7 @@ use crate::prelude::*;
 use snarkvm_algorithms::CommitmentScheme;
 use snarkvm_utilities::{ToBytes, UniformRand};
 
-use anyhow::{anyhow, Result};
+use anyhow::{bail, ensure, Result};
 use once_cell::sync::OnceCell;
 use rand::{CryptoRng, Rng};
 
@@ -105,13 +105,13 @@ impl<N: Network> ResponseBuilder<N> {
             for error in &self.errors {
                 eprintln!("{}", error);
             }
-            return Err(anyhow!("State builder encountered build errors: {:?}", self.errors));
+            bail!("State builder encountered build errors: {:?}", self.errors);
         }
 
         // Fetch the request.
         let request = match self.request.get() {
             Some(request) => request,
-            None => return Err(anyhow!("Builder is missing request")),
+            None => bail!("Builder is missing request"),
         };
 
         // Fetch the events.
@@ -146,9 +146,7 @@ impl<N: Network> ResponseBuilder<N> {
 
         // Ensure the input records have the correct program ID.
         for (i, input_record) in input_records.iter().enumerate().take(N::NUM_INPUTS as usize) {
-            if input_record.program_id() != program_id {
-                return Err(anyhow!("Program ID in input record {} is incorrect", i));
-            }
+            ensure!(input_record.program_id() == program_id, format!("Program ID in input record {} is incorrect.", i));
         }
 
         // TODO (raychu86): Check this. Currently blocking program deployments.
@@ -172,13 +170,14 @@ impl<N: Network> ResponseBuilder<N> {
         }
 
         // Ensure the value balance matches the fee from the request.
-        if value_balance != request.fee() {
-            return Err(anyhow!(
+        ensure!(
+            value_balance == request.fee(),
+            format!(
                 "Value balance does not match fee amount from request. Expected {} from request, found {} from response",
                 request.fee(),
                 value_balance
-            ));
-        }
+            )
+        );
 
         // Compute the transition ID.
         let transition_id = Transition::<N>::compute_transition_id(&serial_numbers, &commitments)?;
