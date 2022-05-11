@@ -17,7 +17,7 @@
 use crate::{circuits::*, prelude::*};
 use snarkvm_algorithms::{merkle_tree::MerklePath, prelude::*};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use itertools::Itertools;
 use rand::{CryptoRng, Rng};
 use std::sync::Arc;
@@ -50,10 +50,7 @@ impl<N: Network> VirtualMachine<N> {
 
     /// Executes the request, returning a transaction.
     pub fn execute<R: Rng + CryptoRng>(mut self, request: &Request<N>, rng: &mut R) -> Result<(Self, Response<N>)> {
-        // Ensure the request is valid.
-        if !request.is_valid() {
-            return Err(anyhow!("Virtual machine received an invalid request"));
-        }
+        ensure!(request.is_valid(), "Virtual machine received an invalid request");
 
         // Compute the operation.
         let operation = request.operation().clone();
@@ -186,21 +183,15 @@ impl<N: Network> VirtualMachine<N> {
         rng: &mut R,
     ) -> Result<Response<N>> {
         // Fetch the caller.
-        if request.caller()? != caller {
-            return Err(anyhow!("Caller in instruction does not match request caller"));
-        }
+        ensure!(request.caller()? == caller, "Caller in instruction does not match request caller");
 
         // Compute the starting balance of the caller.
         let starting_balance = request.to_balance().sub(request.fee());
-        if starting_balance.is_negative() {
-            return Err(VMError::BalanceInsufficient.into());
-        }
+        ensure!(starting_balance.is_positive() || starting_balance.is_zero(), VMError::BalanceInsufficient);
 
         // Compute the final balance of the caller.
         let caller_balance = starting_balance.sub(amount);
-        if caller_balance.is_negative() {
-            return Err(VMError::BalanceInsufficient.into());
-        }
+        ensure!(caller_balance.is_positive() || caller_balance.is_zero(), VMError::BalanceInsufficient);
 
         ResponseBuilder::new()
             .add_request(request.clone())
@@ -224,26 +215,18 @@ impl<N: Network> VirtualMachine<N> {
         // Check that the function id exists in the program.
 
         // Check that the function id is the same as the request.
-        if Some(*function_id) != request.function_id() {
-            return Err(anyhow!("Invalid function id"));
-        }
+        ensure!(Some(*function_id) == request.function_id(), "Invalid function id");
 
         // Fetch the caller.
-        if request.caller()? != function_inputs.caller {
-            return Err(anyhow!("Caller in instruction does not match request caller"));
-        }
+        ensure!(request.caller()? == function_inputs.caller, "Caller in instruction does not match request caller");
 
         // Compute the starting balance of the caller.
         let starting_balance = request.to_balance().sub(request.fee());
-        if starting_balance.is_negative() {
-            return Err(VMError::BalanceInsufficient.into());
-        }
+        ensure!(starting_balance.is_positive() || starting_balance.is_zero(), VMError::BalanceInsufficient);
 
         // Compute the final balance of the caller.
         let caller_balance = starting_balance.sub(function_inputs.amount);
-        if caller_balance.is_negative() {
-            return Err(VMError::BalanceInsufficient.into());
-        }
+        ensure!(caller_balance.is_positive() || caller_balance.is_zero(), VMError::BalanceInsufficient);
 
         let mut response_builder = ResponseBuilder::new().add_request(request.clone()).add_output(Output::new(
             function_inputs.recipient,
@@ -284,10 +267,7 @@ impl<N: Network> VirtualMachine<N> {
         custom_events: Vec<Vec<u8>>,
         rng: &mut R,
     ) -> Result<(Self, Response<N>)> {
-        // Ensure the request is valid.
-        if !request.is_valid() {
-            return Err(anyhow!("Virtual machine received an invalid request"));
-        }
+        ensure!(request.is_valid(), "Virtual machine received an invalid request");
 
         // Compute the operation.
         let operation = request.operation().clone();
