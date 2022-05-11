@@ -18,7 +18,7 @@ use crate::{Address, AleoAmount, FunctionInputs, Network};
 use snarkvm_fields::{ConstraintFieldError, ToConstraintField};
 use snarkvm_utilities::{error, FromBytes, FromBytesDeserializer, ToBytes, ToBytesSerializer};
 
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Result};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     fmt,
@@ -63,7 +63,7 @@ impl<N: Network> Operation<N> {
     pub fn function_inputs(&self) -> Result<FunctionInputs<N>> {
         match self {
             Self::Evaluate(_, function_inputs) => Ok(function_inputs.clone()),
-            _ => Err(anyhow!("operation does not have function inputs")),
+            _ => bail!("Operation does not have function inputs."),
         }
     }
 
