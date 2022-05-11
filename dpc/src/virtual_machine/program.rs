@@ -21,7 +21,7 @@ use snarkvm_algorithms::{
 };
 use snarkvm_utilities::has_duplicates;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use std::{collections::HashMap, sync::Arc};
 
 /// A program defines all possible state transitions for a record.
@@ -86,10 +86,10 @@ impl<N: Network> Program<N> {
     /// Adds the given function to the tree, returning its function index in the tree.
     #[allow(unused)]
     fn add(&mut self, function: Arc<dyn Function<N>>) -> Result<u8> {
-        // Ensure the function does not already exist in the tree.
-        if self.contains_function(&function.function_id()) {
-            return Err(MerkleError::Message(format!("Duplicate function {}", function.function_id())).into());
-        }
+        ensure!(
+            !self.contains_function(&function.function_id()),
+            MerkleError::Message(format!("Duplicate function {}", function.function_id()))
+        );
 
         self.tree = self.tree.rebuild(self.last_function_index as usize, &[function.function_id()])?;
 
@@ -106,23 +106,17 @@ impl<N: Network> Program<N> {
     /// TODO (howardwu): Add safety checks for u8 (max 255 functions).
     /// Adds all given functions to the tree, returning the start and ending function index in the tree.
     fn add_all(&mut self, functions: Vec<Arc<dyn Function<N>>>) -> Result<(u8, u8)> {
-        // Ensure the list of given functions is non-empty.
-        if functions.is_empty() {
-            return Err(anyhow!("The list of given functions must be non-empty"));
-        }
+        ensure!(!functions.is_empty(), "The list of given functions must be non-empty.");
 
         // Construct a list of function IDs.
         let function_ids: Vec<_> = functions.iter().map(|c| c.function_id()).collect();
 
-        // Ensure the list of given function IDs is unique.
-        if has_duplicates(function_ids.iter()) {
-            return Err(anyhow!("The list of given functions contains duplicates"));
-        }
+        ensure!(!has_duplicates(function_ids.iter()), "The list of given functions contains duplicates.");
 
-        // Ensure the functions do not already exist in the tree.
-        if function_ids.iter().any(|id| self.contains_function(id)) {
-            return Err(anyhow!("Some given functions already exist in the program"));
-        }
+        ensure!(
+            !function_ids.iter().any(|function_id| self.contains_function(function_id)),
+            "Some given functions already exist in the program."
+        );
 
         self.tree = self.tree.rebuild(self.last_function_index as usize, &function_ids)?;
 
@@ -130,9 +124,10 @@ impl<N: Network> Program<N> {
         let num_functions = functions.len();
 
         // Ensure that the number of functions does not exceed the u8 bounds of `self.last_function_index`.
-        if (self.last_function_index as usize).saturating_add(num_functions) > u8::MAX as usize {
-            return Err(anyhow!("The program tree will reach its maximum size."));
-        }
+        ensure!(
+            (self.last_function_index as usize).saturating_add(num_functions) <= u8::MAX as usize,
+            "The program tree will reach its maximum size."
+        );
 
         self.functions.extend(
             functions
