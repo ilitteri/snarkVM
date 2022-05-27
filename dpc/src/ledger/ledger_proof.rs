@@ -18,7 +18,7 @@ use crate::prelude::*;
 use snarkvm_algorithms::merkle_tree::MerklePath;
 use snarkvm_utilities::{FromBytes, ToBytes};
 
-use anyhow::{anyhow, Result};
+use anyhow::{ensure, Result};
 use std::io::{Read, Result as IoResult, Write};
 
 /// A ledger proof of inclusion.
@@ -39,13 +39,12 @@ impl<N: Network> LedgerProof<N> {
         record_proof: RecordProof<N>,
     ) -> Result<Self> {
         // Ensure the ledger root inclusion proof is valid.
-        if !ledger_root_inclusion_proof.verify(&ledger_root, &record_proof.block_hash())? {
-            return Err(anyhow!(
-                "Block hash {} does not belong to ledger root {}",
-                record_proof.block_hash(),
-                ledger_root
-            ));
-        }
+        ensure!(
+            ledger_root_inclusion_proof.verify(&ledger_root, &record_proof.block_hash())?,
+            "Block hash {} does not belong to ledger root {}",
+            record_proof.block_hash(),
+            ledger_root
+        );
 
         Ok(Self { ledger_root, ledger_root_inclusion_proof, record_proof })
     }

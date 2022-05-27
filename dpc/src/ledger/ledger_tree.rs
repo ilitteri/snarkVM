@@ -21,7 +21,7 @@ use snarkvm_algorithms::{
 };
 use snarkvm_utilities::has_duplicates;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use std::{collections::HashMap, sync::Arc};
 
 /// A ledger tree contains all block hashes on the ledger.
@@ -50,6 +50,7 @@ impl<N: Network> LedgerTreeScheme<N> for LedgerTree<N> {
     /// Adds the given block hash to the tree, returning its index in the tree.
     fn add(&mut self, block_hash: &N::BlockHash) -> Result<u32> {
         // Ensure the block_hash does not already exist in the tree.
+
         if self.contains_block_hash(block_hash) {
             return Err(MerkleError::Message(format!("{} already exists in the ledger tree", block_hash)).into());
         }
@@ -68,27 +69,25 @@ impl<N: Network> LedgerTreeScheme<N> for LedgerTree<N> {
     /// Adds all given block hashes to the tree, returning the start and ending index in the tree.
     fn add_all(&mut self, block_hashes: &[N::BlockHash]) -> Result<(u32, u32)> {
         // Ensure the list of given block hashes is non-empty.
-        if block_hashes.is_empty() {
-            return Err(anyhow!("The list of given block hashes must be non-empty"));
-        }
+        ensure!(!block_hashes.is_empty(), "The list of given block hashes must be non-empty");
 
         // Ensure the list of given block hashes is unique.
-        if has_duplicates(block_hashes.iter()) {
-            return Err(anyhow!("The list of given block hashes contains duplicates"));
-        }
+        ensure!(!has_duplicates(block_hashes.iter()), "The list of given block hashes contains duplicates");
 
         // Ensure the block hashes do not already exist in the tree.
-        if block_hashes.iter().any(|c| self.contains_block_hash(c)) {
-            return Err(anyhow!("The list of given block hashes contains duplicates"));
-        }
+        ensure!(
+            block_hashes.iter().all(|c| !self.contains_block_hash(c)),
+            "The list of given block hashes contains duplicates"
+        );
 
         let start_index = self.current_index;
         let num_block_hashes = block_hashes.len();
 
         // Ensure that the number of block hashes does not exceed the u32 bounds of `self.current_index`.
-        if (self.current_index as usize).saturating_add(num_block_hashes) > u32::MAX as usize {
-            return Err(anyhow!("The ledger tree will reach its maximum size."));
-        }
+        ensure!(
+            (self.current_index as usize).saturating_add(num_block_hashes) <= u32::MAX as usize,
+            "The ledger tree will reach its maximum size."
+        );
 
         // Add the block hashes to the tree. Start the tree from scratch if the tree is currently empty.
         self.tree = match self.current_index {

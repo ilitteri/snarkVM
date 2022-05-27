@@ -18,7 +18,7 @@ use crate::prelude::*;
 use snarkvm_algorithms::{merkle_tree::*, prelude::*};
 use snarkvm_utilities::has_duplicates;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use std::{collections::HashMap, sync::Arc};
 
 /// A local transitions tree contains all the transitions for one transaction.
@@ -55,9 +55,7 @@ impl<N: Network> Transitions<N> {
         }
 
         // Ensure the current index has not reached the maximum number of transitions permitted in software.
-        if self.current_index >= N::NUM_TRANSITIONS {
-            return Err(anyhow!("The transitions tree has reached its maximum size"));
-        }
+        ensure!(self.current_index < N::NUM_TRANSITIONS, "The transitions tree has reached its maximum size");
 
         self.tree = Arc::new(self.tree.rebuild(self.current_index as usize, &[transition_id])?);
         self.transitions.insert(transition_id, (self.current_index, transition.clone()));
@@ -72,23 +70,18 @@ impl<N: Network> Transitions<N> {
     /// Adds all given transitions to the tree, returning the start and ending index in the tree.
     pub(crate) fn add_all(&mut self, transitions: &[Transition<N>]) -> Result<(u8, u8)> {
         // Ensure the current index has not reached the maximum number of transitions permitted in software.
-        if self.current_index >= N::NUM_TRANSITIONS
-            || (self.current_index as usize).saturating_add(transitions.len()) >= N::NUM_TRANSITIONS as usize
-        {
-            return Err(anyhow!("The transitions tree has reached its maximum size"));
-        }
+        ensure!(
+            (self.current_index as usize).saturating_add(transitions.len()) < N::NUM_TRANSITIONS as usize,
+            "The transitions tree has reached its maximum size"
+        );
 
         // Ensure the list of given transitions is unique.
         let transition_ids = transitions.iter().map(Transition::transition_id).collect::<Vec<_>>();
-        if has_duplicates(transition_ids.iter()) {
-            return Err(anyhow!("The list of given transitions contains duplicates"));
-        }
+        ensure!(!has_duplicates(transition_ids.iter()), "The list of given transitions contains duplicates");
 
         // Ensure the transitions do not already exist in the tree.
         let num_duplicates = transition_ids.iter().filter(|id| self.contains_transition(id)).count();
-        if num_duplicates > 0 {
-            return Err(anyhow!("The list of given transitions contains double spends"));
-        }
+        ensure!(num_duplicates == 0, "The list of given transitions contains double spends");
 
         let start_index = self.current_index;
         self.tree = Arc::new(self.tree.rebuild(self.current_index as usize, &transition_ids)?);

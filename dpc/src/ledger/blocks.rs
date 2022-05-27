@@ -17,7 +17,7 @@
 use crate::prelude::*;
 use snarkvm_algorithms::merkle_tree::*;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use itertools::Itertools;
 use std::collections::HashMap;
 use time::OffsetDateTime;
@@ -139,9 +139,7 @@ impl<N: Network> Blocks<N> {
 
     /// Returns the block hash given the block height.
     pub fn get_block_hash(&self, height: u32) -> Result<N::BlockHash> {
-        if height > self.current_height {
-            return Err(anyhow!("Given block height {} is greater than current height", height));
-        }
+        ensure!(height <= self.current_height, "Given block height {} is greater than current height", height);
 
         match height == self.current_height {
             true => Ok(self.current_hash),
@@ -193,93 +191,82 @@ impl<N: Network> Blocks<N> {
 
     /// Adds the given block as the next block in the chain.
     pub fn add_next(&mut self, block: &Block<N>) -> Result<()> {
-        // Ensure the block itself is valid.
-        if !block.is_valid() {
-            return Err(anyhow!("The given block is invalid"));
-        }
+        ensure!(block.is_valid(), "The given block is invalid");
 
-        // Ensure the next block height is correct.
         let height = block.height();
-        if self.current_height + 1 != height {
-            return Err(anyhow!("The given block has an incorrect block height"));
-        }
+        ensure!(self.current_height + 1 == height, "The given block has an incorrect block height");
 
         // Ensure the block height does not already exist.
-        if self.contains_height(height) {
-            return Err(anyhow!("The given block height already exists in the ledger"));
-        }
+        ensure!(!self.contains_height(height), "The given block height already exists in the ledger");
 
         // Ensure the previous block hash is correct.
-        if self.current_hash != block.previous_block_hash() {
-            return Err(anyhow!("The given block has an incorrect previous block hash"));
-        }
+        ensure!(
+            self.current_hash == block.previous_block_hash(),
+            "The given block has an incorrect previous block hash"
+        );
 
         // Ensure the block hash does not already exist.
         let block_hash = block.hash();
-        if self.contains_block_hash(&block_hash) {
-            return Err(anyhow!("The given block hash already exists in the ledger"));
-        }
+        ensure!(!self.contains_block_hash(&block_hash), "The given block hash already exists in the ledger");
 
         // Ensure the next block timestamp is within the declared time limit.
         let now = OffsetDateTime::now_utc().unix_timestamp();
-        if block.timestamp() > (now + N::ALEO_FUTURE_TIME_LIMIT_IN_SECS) {
-            return Err(anyhow!("The given block timestamp exceeds the time limit"));
-        }
+        ensure!(
+            block.timestamp() <= (now + N::ALEO_FUTURE_TIME_LIMIT_IN_SECS),
+            "The given block timestamp exceeds the time limit"
+        );
 
-        // Ensure the next block timestamp is after the current block timestamp.
         let current_block = self.latest_block()?;
-        if block.timestamp() <= current_block.timestamp() {
-            return Err(anyhow!("The given block timestamp is before the current timestamp"));
-        }
+        ensure!(
+            block.timestamp() > current_block.timestamp(),
+            "The given block timestamp is before the current timestamp"
+        );
 
         // Ensure the expected difficulty target is met.
         let expected_difficulty_target =
             Blocks::<N>::compute_difficulty_target(N::genesis_block().header(), block.timestamp(), block.height());
-        if block.difficulty_target() != expected_difficulty_target {
-            return Err(anyhow!(
-                "The given block difficulty target is incorrect. Found {}, but expected {}",
-                block.difficulty_target(),
-                expected_difficulty_target
-            ));
-        }
+
+        ensure!(
+            block.difficulty_target() == expected_difficulty_target,
+            "The given block difficulty target is incorrect. Found {}, but expected {}",
+            block.difficulty_target(),
+            expected_difficulty_target
+        );
 
         // Ensure the expected cumulative weight is computed correctly.
         let expected_cumulative_weight =
             current_block.cumulative_weight().saturating_add((u64::MAX / expected_difficulty_target) as u128);
-        if block.cumulative_weight() != expected_cumulative_weight {
-            return Err(anyhow!(
-                "The given cumulative weight is incorrect. Found {}, but expected {}",
-                block.cumulative_weight(),
-                expected_cumulative_weight
-            ));
-        }
+
+        ensure!(
+            block.cumulative_weight() == expected_cumulative_weight,
+            "The given cumulative weight is incorrect. Found {}, but expected {}",
+            block.cumulative_weight(),
+            expected_cumulative_weight
+        );
 
         for transaction in block.transactions().iter() {
             // Ensure the transaction in the block do not already exist.
-            if self.contains_transaction(transaction) {
-                return Err(anyhow!("The given block has a duplicate transaction in the ledger"));
-            }
+            ensure!(
+                !self.contains_transaction(transaction),
+                "The given block has a duplicate transaction in the ledger"
+            );
+
             // Ensure the transaction in the block references a valid past or current ledger root.
-            if !self.contains_ledger_root(&transaction.ledger_root()) {
-                return Err(anyhow!(
-                    "The given transaction references a non-existent ledger root {}",
-                    &transaction.ledger_root()
-                ));
-            }
+            ensure!(
+                self.contains_ledger_root(&transaction.ledger_root()),
+                "The given transaction references a non-existent ledger root {}",
+                &transaction.ledger_root()
+            );
         }
 
         // Ensure the ledger does not already contain a given serial numbers.
         for serial_number in block.serial_numbers() {
-            if self.contains_serial_number(serial_number) {
-                return Err(anyhow!("Serial number already exists in the ledger"));
-            }
+            ensure!(!self.contains_serial_number(serial_number), "Serial number already exists in the ledger");
         }
 
         // Ensure the ledger does not already contain a given commitments.
         for commitment in block.commitments() {
-            if self.contains_commitment(commitment) {
-                return Err(anyhow!("Commitment already exists in the ledger"));
-            }
+            ensure!(!self.contains_commitment(commitment), "Commitment already exists in the ledger");
         }
 
         // Add the block to the ledger. This code section executes atomically.
@@ -324,9 +311,7 @@ impl<N: Network> Blocks<N> {
             .filter(|transaction| transaction.commitments().contains(&commitment))
             .collect::<Vec<_>>();
 
-        if transaction.len() != 1 {
-            return Err(anyhow!("Multiple transactions associated with commitment {}", commitment.to_string()));
-        }
+        ensure!(transaction.len() == 1, "Multiple transactions associated with commitment {}", commitment.to_string());
 
         let transaction = transaction[0];
         let local_proof = {
@@ -349,9 +334,7 @@ impl<N: Network> Blocks<N> {
             })
             .collect::<Vec<_>>();
 
-        if block_height.len() != 1 {
-            return Err(anyhow!("Multiple blocks associated with transaction {}", transaction_id.to_string()));
-        }
+        ensure!(block_height.len() == 1, "Multiple blocks associated with transaction {}", transaction_id.to_string());
 
         let block_height = *block_height[0];
         let transactions = self.get_block_transactions(block_height)?;
@@ -369,9 +352,11 @@ impl<N: Network> Blocks<N> {
                 })
                 .collect::<Vec<_>>();
 
-            if index.len() != 1 {
-                return Err(anyhow!("Block contains multiple transactions with the id {}", transaction_id.to_string()));
-            }
+            ensure!(
+                index.len() == 1,
+                "Block contains multiple transactions with the id {}",
+                transaction_id.to_string()
+            );
 
             transactions.to_transactions_inclusion_proof(index[0], transaction_id)?
         };

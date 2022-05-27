@@ -18,7 +18,7 @@ use crate::{AleoAmount, BlockError, DecryptionKey, Network, Record, Transaction}
 use snarkvm_algorithms::merkle_tree::*;
 use snarkvm_utilities::{has_duplicates, FromBytes, FromBytesDeserializer, ToBytes, ToBytesSerializer};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use rayon::prelude::*;
 use serde::{
     de,
@@ -150,10 +150,9 @@ impl<N: Network> Transactions<N> {
 
         // Ensure there is exactly 1 coinbase transaction.
         let num_coinbase = coinbase_transaction.len();
-        match num_coinbase == 1 {
-            true => Ok(coinbase_transaction[0].clone()),
-            false => Err(anyhow!("Block must have 1 coinbase transaction, found {}", num_coinbase)),
-        }
+        ensure!(num_coinbase == 1, "Block must have 1 coinbase transaction, found {}", num_coinbase);
+
+        Ok(coinbase_transaction[0].clone())
     }
 
     /// Returns the transactions root, by computing the root for a Merkle tree of the transaction IDs.

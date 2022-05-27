@@ -16,7 +16,7 @@
 
 use crate::prelude::*;
 
-use anyhow::{anyhow, Result};
+use anyhow::{ensure, Result};
 use rand::{CryptoRng, Rng};
 use std::{collections::HashMap, sync::atomic::AtomicBool};
 use time::OffsetDateTime;
@@ -103,10 +103,7 @@ impl<N: Network> Ledger<N> {
 
     /// Adds the given orphan block, if it is well-formed and does not already exist.
     pub fn add_orphan_block(&mut self, block: &Block<N>) -> Result<()> {
-        // Ensure the block does not exist in canon.
-        if self.canon_blocks.contains_block_hash(&block.hash()) {
-            return Err(anyhow!("Orphan block already exists in canon chain"));
-        }
+        ensure!(!self.canon_blocks.contains_block_hash(&block.hash()), "Orphan block already exists in canon chain");
 
         // Insert the block into the orphan blocks.
         self.orphan_blocks.insert(block.height(), block.clone());
@@ -116,23 +113,25 @@ impl<N: Network> Ledger<N> {
 
     /// Adds the given unconfirmed transaction to the memory pool.
     pub fn add_unconfirmed_transaction(&mut self, transaction: &Transaction<N>) -> Result<()> {
-        // Ensure the transaction contains ledger roots from the canon chain.
-        if !self.canon_blocks.contains_ledger_root(&transaction.ledger_root()) {
-            return Err(anyhow!("Transaction references a non-existent ledger root"));
-        }
+        ensure!(
+            self.canon_blocks.contains_ledger_root(&transaction.ledger_root()),
+            "Transaction references a non-existent ledger root"
+        );
 
         // Ensure the transaction does not contain serial numbers already in the canon chain.
         for serial_number in transaction.serial_numbers() {
-            if self.canon_blocks.contains_serial_number(serial_number) {
-                return Err(anyhow!("Transaction contains a serial number already in existence"));
-            }
+            ensure!(
+                !self.canon_blocks.contains_serial_number(serial_number),
+                "Transaction contains a serial number already in existence"
+            );
         }
 
         // Ensure the transaction does not contain commitments already in the canon chain.
         for commitment in transaction.commitments() {
-            if self.canon_blocks.contains_commitment(commitment) {
-                return Err(anyhow!("Transaction contains a commitment already in existence"));
-            }
+            ensure!(
+                !self.canon_blocks.contains_commitment(commitment),
+                "Transaction contains a commitment already in existence"
+            );
         }
 
         // Attempt to add the transaction into the memory pool.

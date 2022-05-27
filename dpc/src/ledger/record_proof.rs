@@ -18,7 +18,7 @@ use crate::prelude::*;
 use snarkvm_algorithms::{merkle_tree::MerklePath, prelude::*};
 use snarkvm_utilities::{to_bytes_le, FromBytes, ToBytes};
 
-use anyhow::{anyhow, Result};
+use anyhow::{ensure, Result};
 use std::io::{Read, Result as IoResult, Write};
 
 /// A proof of inclusion for a record in a block.
@@ -53,35 +53,29 @@ impl<N: Network> RecordProof<N> {
         transactions_inclusion_proof: MerklePath<N::TransactionsRootParameters>,
         local_proof: LocalProof<N>,
     ) -> Result<Self> {
-        // Ensure the transactions inclusion proof is valid.
         let transaction_id = local_proof.transaction_id();
-        if !transactions_inclusion_proof.verify(&transactions_root, &transaction_id)? {
-            return Err(anyhow!(
-                "Transaction {} does not belong to transactions root {}",
-                transaction_id,
-                transactions_root
-            ));
-        }
+        ensure!(
+            transactions_inclusion_proof.verify(&transactions_root, &transaction_id)?,
+            "Transaction {} does not belong to transactions root {}",
+            transaction_id,
+            transactions_root
+        );
 
-        // Ensure the block header inclusion proof is valid.
-        if !block_header_inclusion_proof.verify(&block_header_root, &transactions_root)? {
-            return Err(anyhow!(
-                "Transactions root {} does not belong to block header {}",
-                transactions_root,
-                block_header_root
-            ));
-        }
+        ensure!(
+            block_header_inclusion_proof.verify(&block_header_root, &transactions_root)?,
+            "Transactions root {} does not belong to block header {}",
+            transactions_root,
+            block_header_root
+        );
 
-        // Ensure the block hash is valid.
         let candidate_block_hash: N::BlockHash =
             N::block_hash_crh().hash_bytes(&to_bytes_le![previous_block_hash, block_header_root]?)?.into();
-        if candidate_block_hash != block_hash {
-            return Err(anyhow!(
-                "Candidate block hash {} does not match given block hash {}",
-                candidate_block_hash,
-                block_hash
-            ));
-        }
+        ensure!(
+            candidate_block_hash == block_hash,
+            "Candidate block hash {} does not match given block hash {}",
+            candidate_block_hash,
+            block_hash
+        );
 
         Ok(Self {
             block_hash,
