@@ -18,7 +18,7 @@ use crate::prelude::*;
 use snarkvm_algorithms::merkle_tree::MerklePath;
 use snarkvm_utilities::{FromBytes, ToBytes};
 
-use anyhow::{anyhow, Result};
+use anyhow::{ensure, Result};
 use std::io::{Read, Result as IoResult, Write};
 
 /// A local proof of inclusion.
@@ -43,14 +43,20 @@ impl<N: Network> LocalProof<N> {
         commitment: N::Commitment,
     ) -> Result<Self> {
         // Ensure the transition inclusion proof is valid.
-        if !transition_inclusion_proof.verify(&transition_id, &commitment)? {
-            return Err(anyhow!("Commitment {} does not belong to transition {}", commitment, transition_id));
-        }
+        ensure!(
+            transition_inclusion_proof.verify(&transition_id, &commitment)?,
+            "Commitment {} does not belong to transition {}",
+            commitment,
+            transition_id
+        );
 
         // Ensure the transaction inclusion proof is valid.
-        if !transaction_inclusion_proof.verify(&transaction_id, &transition_id)? {
-            return Err(anyhow!("Transition {} does not belong to transaction {}", transition_id, transaction_id));
-        }
+        ensure!(
+            transaction_inclusion_proof.verify(&transaction_id, &transition_id)?,
+            "Transition {} does not belong to transaction {}",
+            transition_id,
+            transaction_id
+        );
 
         Ok(Self { transaction_id, transaction_inclusion_proof, transition_id, transition_inclusion_proof, commitment })
     }

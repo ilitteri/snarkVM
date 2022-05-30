@@ -185,11 +185,7 @@ impl<N: Network> PoSWScheme<N> for PoSW<N> {
         }
 
         // Ensure the proof is valid under the deprecated PoSW parameters.
-        if !proof.verify(&self.verifying_key, inputs) {
-            return false;
-        }
-
-        true
+        proof.verify(&self.verifying_key, inputs)
     }
 }
 
