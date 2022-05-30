@@ -23,10 +23,7 @@ use rayon::prelude::*;
 use serde::{
     de,
     ser::{self, SerializeStruct},
-    Deserialize,
-    Deserializer,
-    Serialize,
-    Serializer,
+    Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::{
     fmt,

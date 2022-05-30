@@ -18,7 +18,7 @@ use crate::prelude::*;
 use snarkvm_algorithms::merkle_tree::MerklePath;
 use snarkvm_utilities::{FromBytes, ToBytes};
 
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{ensure, Result};
 use std::io::{Read, Result as IoResult, Write};
 
 /// A local proof of inclusion.
