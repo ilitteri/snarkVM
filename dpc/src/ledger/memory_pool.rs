@@ -16,7 +16,7 @@
 
 use crate::prelude::*;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug)]
@@ -55,34 +55,23 @@ impl<N: Network> MemoryPool<N> {
 
     /// Adds the given unconfirmed transaction to the memory pool.
     pub fn add_transaction(&mut self, transaction: &Transaction<N>) -> Result<()> {
-        // Ensure the unconfirmed transaction itself is valid.
-        if !transaction.is_valid() {
-            return Err(anyhow!("The unconfirmed transaction is invalid"));
-        }
+        ensure!(transaction.is_valid(), "The unconfirmed transaction is invalid");
 
         // Ensure the transaction does not attempt to mint new value.
-        if transaction.value_balance().is_negative() {
-            return Err(anyhow!("The unconfirmed transaction is attempting to mint new value"));
-        }
+        ensure!(
+            !transaction.value_balance().is_negative(),
+            "The unconfirmed transaction is attempting to mint new value"
+        );
 
-        // Ensure the transaction does not already exist in the memory pool.
         let transaction_id = transaction.transaction_id();
-        if self.transactions.contains_key(&transaction_id) {
-            return Err(anyhow!("Transaction already exists in memory pool"));
-        }
+        ensure!(!self.transactions.contains_key(&transaction_id), "Transaction already exists in memory pool");
 
-        // Ensure the memory pool does not already contain a given serial numbers.
         for serial_number in transaction.serial_numbers() {
-            if self.serial_numbers.contains(serial_number) {
-                return Err(anyhow!("Serial number already used in memory pool"));
-            }
+            ensure!(!self.serial_numbers.contains(serial_number), "Serial number already used in memory pool");
         }
 
-        // Ensure the memory pool does not already contain a given commitments.
         for commitment in transaction.commitments() {
-            if self.commitments.contains(commitment) {
-                return Err(anyhow!("Commitment already used in memory pool"));
-            }
+            ensure!(!self.commitments.contains(commitment), "Commitment already used in memory pool");
         }
 
         // Add the transaction to the memory pool. This code section executes atomically.
@@ -90,12 +79,9 @@ impl<N: Network> MemoryPool<N> {
             let mut memory_pool = self.clone();
 
             memory_pool.transactions.insert(transaction_id, transaction.clone());
-            for serial_number in transaction.serial_numbers() {
-                memory_pool.serial_numbers.insert(*serial_number);
-            }
-            for commitment in transaction.commitments() {
-                memory_pool.commitments.insert(*commitment);
-            }
+
+            memory_pool.serial_numbers.extend(transaction.serial_numbers());
+            memory_pool.commitments.extend(transaction.commitments());
 
             *self = memory_pool;
         }

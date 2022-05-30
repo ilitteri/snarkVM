@@ -27,7 +27,7 @@ use snarkvm_utilities::{
     UniformRand,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{ensure, Result};
 use rand::{CryptoRng, Rng};
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 use std::{mem::size_of, sync::atomic::AtomicBool};
@@ -121,12 +121,8 @@ impl<N: Network> BlockHeader<N> {
     ) -> Result<Self> {
         // Mine the block.
         let block_header = N::posw().mine(block_template, terminator, rng)?;
-
-        // Ensure the block header is valid.
-        match block_header.is_valid() {
-            true => Ok(block_header),
-            false => Err(anyhow!("Failed to initialize a block header")),
-        }
+        ensure!(block_header.is_valid(), "Failed to initialize a block header");
+        Ok(block_header)
     }
 
     ///
